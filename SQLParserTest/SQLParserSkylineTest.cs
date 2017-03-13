@@ -623,6 +623,40 @@ namespace prefSQL.SQLParserTest
 
         }
 
+        [TestMethod]
+        [TestCategory("UnitTest")]
+        public void TestParserCaseSensitivity()
+        {
+            var prefSqlQuery = "SELECT * FROM cars SKYLINE OF cars.price AROUND 15000, cars.mileage LOW";
+            var expected = "SELECT * FROM cars WHERE NOT EXISTS(SELECT * FROM cars cars_INNER WHERE ABS(cars_INNER.price - 15000) <= ABS(cars.price - 15000) AND cars_INNER.mileage <= cars.mileage AND ( ABS(cars_INNER.price - 15000) < ABS(cars.price - 15000) OR cars_INNER.mileage < cars.mileage) )";
+            var common = new SQLCommon();
+            var actualNoCaseChange = common.ParsePreferenceSQL(prefSqlQuery);
+            var actualUpperCase = common.ParsePreferenceSQL(prefSqlQuery.ToUpper());
+            var actualLowerCase = common.ParsePreferenceSQL(prefSqlQuery.ToLower());
+
+            Assert.AreEqual(expected.Trim(), actualNoCaseChange.Trim(), true);
+            Assert.AreEqual(expected.Trim(), actualUpperCase.Trim(), true);
+            Assert.AreEqual(expected.Trim(), actualLowerCase.Trim(), true);
+
+        }
+
+        [TestMethod]
+        [TestCategory("UnitTest")]
+        public void TestParserKeywordsInIdentifier()
+        {
+            var prefSqlQuery = "SELECT TOP 5 Id, FieldA AS IDFROM, FieldB AS IDWHERE, FieldC AS IDTOP " +
+                               "FROM table " +
+                               "SKYLINE OF id LOW";
+            var expected = "SELECT TOP 5 Id, FieldA AS IDFROM, FieldB AS IDWHERE, FieldC AS IDTOP " +
+                           "FROM table " +
+                           "WHERE NOT EXISTS(SELECT Id, FieldA AS IDFROM, FieldB AS IDWHERE, FieldC AS IDTOP FROM table table_INNER WHERE _INNER.id <= .id AND ( _INNER.id < .id) )";
+            var common = new SQLCommon();
+            var actual = common.ParsePreferenceSQL(prefSqlQuery);
+
+            Assert.AreEqual(expected.Trim(), actual.Trim(), true);
+        }
+
+
 
         void cnnSQL_InfoMessage(object sender, SqlInfoMessageEventArgs e)
         {

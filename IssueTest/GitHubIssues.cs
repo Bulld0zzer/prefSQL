@@ -2,6 +2,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using prefSQL.SQLParser;
 using prefSQL.SQLSkyline;
+using System.Data;
+using System.Data.SqlClient;
 
 namespace IssueTest
 {
@@ -71,6 +73,138 @@ namespace IssueTest
 
         }
 
+
+        //Concatenation of constant and attribute values result in error
+        //https://github.com/migaman/prefSQL/issues/54
+        [TestMethod]
+        [TestCategory("UnitTest")]
+        public void TestIssue54()
+        {
+            string prefSQL = "SELECT c.Title AS Name, c.Price, c.Consumption, m.Name AS Manufacturer, b.Name AS Body "
+                              + "FROM Cars c "
+                              + "LEFT OUTER JOIN Makes m ON c.Make_Id = m.Id "
+                              + "LEFT OUTER JOIN Bodies b ON c.Body_Id = b.Id "
+                              + "WHERE m.Name = 'VW' AND b.Name = 'Bus' "
+                              + "SKYLINE OF c.Price LOW 1000 EQUAL, c.Consumption LOW";
+
+            var common = new SQLCommon
+            {
+                SkylineType = new SkylineBNL(),
+                ShowInternalAttributes = true
+            };
+
+
+            try
+            {
+                //If there is no exception in the execution of this query the test is successful
+                DataTable dt = common.ParseAndExecutePrefSQL(Helper.ConnectionString, Helper.ProviderName, prefSQL);
+                Assert.IsTrue(true);
+            }
+            catch
+            {
+                Assert.IsFalse(true);
+            }
+        }
+
+
+
+        //Parses fails if identifier contain keywords
+        //https://github.com/migaman/prefSQL/issues/63
+        [TestMethod]
+        [TestCategory("UnitTest")]
+        public void TestIssue63()
+        {
+            string prefSQL = "SELECT TOP 5 c.Id, c.title AS IDFROM, c.title AS IDWHERE, c.title AS IDTOP "
+                            + "FROM Cars c "
+                            + "SKYLINE OF c.id LOW ";
+
+            var common = new SQLCommon
+            {
+                SkylineType = new SkylineBNL(),
+                ShowInternalAttributes = true
+            };
+
+
+            try
+            {
+                //If there is no exception in the execution of this query the test is successful
+                DataTable dt = common.ParseAndExecutePrefSQL(Helper.ConnectionString, Helper.ProviderName, prefSQL);
+                Assert.IsTrue(true);
+            }
+            catch
+            {
+                Assert.IsFalse(true);
+            }
+        }
+
+
+        //Nested queries not supported  
+        //https://github.com/migaman/prefSQL/issues/66
+        [TestMethod]
+        [TestCategory("UnitTest")]
+        public void TestIssue66()
+        {
+            string prefSQL = " SELECT * FROM ( SELECT * FROM cars )b";
+
+            var common = new SQLCommon
+            {
+                SkylineType = new SkylineBNL(),
+                ShowInternalAttributes = false
+            };
+
+
+            try
+            {
+                //If there is no exception in the execution of this query the test is successful
+                DataTable dt = common.ParseAndExecutePrefSQL(Helper.ConnectionString, Helper.ProviderName, prefSQL);
+                Assert.IsTrue(true);
+            }
+            catch
+            {
+                Assert.IsFalse(true);
+            }
+        }
+
+
+
+        //TemplateStrategy.SkylineValues not set for algorithms other than BNL
+        //https://github.com/migaman/prefSQL/issues/67
+        [TestMethod]
+        [TestCategory("UnitTest")]
+        public void TestIssue67()
+        {
+            string prefSQL = "SELECT c.Title as Name, c.Price, co.Name As Color  "
+                            + "FROM Cars c "
+                            + "LEFT OUTER JOIN Colors co ON c.Color_Id = co.Id "
+                            + "SKYLINE OF c.Price HIGH, co.Name ('pink' >> 'black' >> OTHERS EQUAL)  "
+                            + "ORDER BY BEST_RANK()";
+
+
+            SQLCommon common = new SQLCommon();
+            common.SkylineType = new SkylineDQ(); 
+
+            try
+            {
+                //If there is no exception in the execution of this query the test is successful
+                DataTable dtStandalone = common.ParseAndExecutePrefSQL(Helper.ConnectionString, Helper.ProviderName, prefSQL);
+
+                String sql = common.ParsePreferenceSQL(prefSQL);
+                SqlConnection cnnSQL = new SqlConnection(Helper.ConnectionString); //for CLR performance tets
+                cnnSQL.Open();
+                SqlDataAdapter dap = new SqlDataAdapter(sql, cnnSQL);
+                DataTable dtCLR = new DataTable();
+                dap.Fill(dtCLR);
+
+                Assert.AreEqual(dtStandalone.Rows.Count, dtCLR.Rows.Count);
+            }
+            catch
+            {
+                Assert.IsFalse(true);
+            }
+        }
+
+
+        
 
     }
 }
